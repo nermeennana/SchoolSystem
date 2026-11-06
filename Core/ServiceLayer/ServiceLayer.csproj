@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../DomainLayer/DomainLayer.csproj" />
+    <ProjectReference Include="../ServiceAbstractionLayer/ServiceAbstractionLayer.csproj" />
+  </ItemGroup>
+
 </Project>

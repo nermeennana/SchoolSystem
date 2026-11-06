@@ -6,4 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../Core/ServiceLayer/ServiceLayer.csproj" />
+    <ProjectReference Include="../Infrastructure/Persistence/Persistence.csproj" />
+    <ProjectReference Include="../Infrastructure/Presentation/Presentation.csproj" />
+  </ItemGroup>
+
 </Project>
