@@ -2,9 +2,8 @@ using System;
 
 namespace DomainLayer.Models;
 
-public class Student
+public class Student : BaseEntity<int>
 {
-    public int Id { get; set; }
     public string Name { get; set; } = null!;
     public string Address { get; set; } = null!;
     public DateTime DateOfBirth { get; set; }
@@ -12,4 +11,6 @@ public class Student
     public string ParentPhoneNumber { get; set; } = null!;
     public int GradeLevel { get; set; }
     public string UserId { get; set; } = null!;
+
+    public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
 }

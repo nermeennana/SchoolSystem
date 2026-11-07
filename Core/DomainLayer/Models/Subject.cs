@@ -2,8 +2,7 @@ using System;
 
 namespace DomainLayer.Models;
 
-public class Subject
+public class Subject : BaseEntity<int>
 {
-    public int Id { get; set; }
-    public string Name { get; set; } =null!;
+    public string Name { get; set; } = null!;
 }

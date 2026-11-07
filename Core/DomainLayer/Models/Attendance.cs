@@ -2,9 +2,10 @@ using System;
 
 namespace DomainLayer.Models;
 
-public class Attendance
+public class Attendance : BaseEntity<int>
 {
-    public int Id { get; set; }
     public int EnrollmentId { get; set; }
     public DateTime Date { get; set; }
+
+    public Enrollment Enrollment { get; set; } = null!;
 }
