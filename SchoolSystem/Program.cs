@@ -1,3 +1,5 @@
+using DomainLayer.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Data;
 
@@ -11,6 +13,18 @@ public class Program
 
         builder.Services.AddDbContext<SchoolDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+        builder.Services.AddIdentityCore<AppUser>(options =>
+        {
+            options.Password.RequireDigit = true;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+            options.Password.RequiredLength = 8;
+
+            options.User.RequireUniqueEmail = true;
+        }).AddRoles<IdentityRole>()
+          .AddEntityFrameworkStores<SchoolDbContext>();
 
         var app = builder.Build();
 
