@@ -35,6 +35,14 @@ dotnet new gitignore
 > `--use-program-main` بيخلي `Program.cs` يتعمل بـ `class Program` و `Main`، مش top-level statements.
 
 - [ ] امسحي كل ملفات `Class1.cs`.
+- [ ] اربطيه بـ GitHub: اعملي repo **فاضي** (من غير README)، وبعدين:
+
+```bash
+git remote add origin https://github.com/nermeennana/SchoolSystem.git
+git push -u origin main
+```
+
+> لو طلع `403`: الـ token مش مسموحله على الـ repo ده. عدّليه من GitHub ← Settings ← Developer settings ← Fine-grained tokens.
 
 ## 2. الـ References (مين يشوف مين)
 
@@ -204,8 +212,24 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 
 ## 10. Seeding (بيانات أولية)  ⏳ جاري
 
-- [ ] أسماء الـ roles كـ constants في `Shared/Constants/Roles.cs`.
-- [ ] نعمل الـ roles وأول Admin لما البروجكت يقوم.
+- [x] أسماء الـ roles كـ constants في `Shared/Constants/Roles.cs` (`public static class`).
+- [x] `IdentitySeeder.SeedRolesAsync` في `Persistence/Data/Seeding`: لو الـ role مش موجود، اعمله.
+- [x] نناديه في `Program.cs` بعد `builder.Build()`:
+
+```csharp
+public static async Task Main(string[] args)   // async عشان فيها await
+...
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    await IdentitySeeder.SeedRolesAsync(roleManager);
+}
+```
+
+> `CreateScope()`: الـ `DbContext` بيعيش لمدة request واحد، ولسه مفيش request، فبنعمل scope مؤقت.
+> لو طلع `address already in use`: البروجكت شغال في مكان تاني، فوقفيه بـ `Ctrl+C`.
+
+- [ ] أول Admin، وباسورده في User Secrets.
 
 ## الجاي ⏳
 
@@ -219,7 +243,7 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 
 ## نصايح
 
-- **Commit بعد كل خطوة** شغالة.
+- **Commit بعد كل خطوة** شغالة، وبعدها `git push` عشان تترفع على GitHub.
 - **`dotnet build` بعد كل تعديل**، عشان تمسكي الـ errors بدري.
 - **راجعي ملف الـ migration** قبل `database update`.
 - مش لازم تحفظي الكود. المهم تعرفي **كل حتة بتعمل إيه**، و**الترتيب**.

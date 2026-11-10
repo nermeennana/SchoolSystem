@@ -2,12 +2,13 @@ using DomainLayer.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Data;
+using Persistence.Data.Seeding;
 
 namespace SchoolSystem;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,12 @@ public class Program
           .AddEntityFrameworkStores<SchoolDbContext>();
 
         var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+            await IdentitySeeder.SeedRolesAsync(roleManager);
+        }
 
         app.MapGet("/", () => "Hello World!");
 
