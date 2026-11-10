@@ -1,11 +1,12 @@
 using System;
 using DomainLayer.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Data.Configurations;
 
 namespace Persistence.Data;
 
-public class SchoolDbContext : DbContext
+public class SchoolDbContext : IdentityDbContext<AppUser>
 {
     public SchoolDbContext(DbContextOptions<SchoolDbContext> options) : base(options)
     {

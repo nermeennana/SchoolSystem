@@ -12,4 +12,5 @@ public class Teacher : BaseEntity<int>
 
     public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
     public Subject Subject { get; set; } = null!;
+    public AppUser User { get; set; } = null!;
 }

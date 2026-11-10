@@ -13,4 +13,5 @@ public class Student : BaseEntity<int>
     public string UserId { get; set; } = null!;
 
     public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
+    public AppUser User { get; set; } = null!;
 }

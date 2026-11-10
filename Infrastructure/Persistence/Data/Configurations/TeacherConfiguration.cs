@@ -18,5 +18,10 @@ public class TeacherConfiguration : IEntityTypeConfiguration<Teacher>
                .WithMany()
                .HasForeignKey(t => t.SubjectId)
                .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(t => t.User)
+               .WithOne()
+               .HasForeignKey<Teacher>(t => t.UserId)
+               .OnDelete(DeleteBehavior.Restrict);
     }
 }

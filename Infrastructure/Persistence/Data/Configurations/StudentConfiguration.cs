@@ -14,5 +14,10 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
         builder.Property(s => s.PhoneNumber).IsRequired().HasMaxLength(20);
         builder.Property(s => s.ParentPhoneNumber).IsRequired().HasMaxLength(20);
         builder.Property(s => s.UserId).IsRequired().HasMaxLength(450);
+
+        builder.HasOne(s => s.User)
+            .WithOne()
+            .HasForeignKey<Student>(s => s.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
