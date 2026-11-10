@@ -33,6 +33,15 @@ public class Program
         {
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
             await IdentitySeeder.SeedRolesAsync(roleManager);
+
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+            var adminEmail = builder.Configuration["AdminUser:Email"];
+            var adminPassword = builder.Configuration["AdminUser:Password"];
+            if(string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword))
+            {
+                throw new Exception("Admin user email or password is not configured.");
+            }
+            await IdentitySeeder.SeedAdminAsync(userManager, adminEmail, adminPassword);
         }
 
         app.MapGet("/", () => "Hello World!");

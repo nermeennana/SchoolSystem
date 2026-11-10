@@ -210,7 +210,7 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 
 ---
 
-## 10. Seeding (بيانات أولية)  ⏳ جاري
+## 10. Seeding (بيانات أولية) ✅
 
 - [x] أسماء الـ roles كـ constants في `Shared/Constants/Roles.cs` (`public static class`).
 - [x] `IdentitySeeder.SeedRolesAsync` في `Persistence/Data/Seeding`: لو الـ role مش موجود، اعمله.
@@ -229,7 +229,22 @@ using (var scope = app.Services.CreateScope())
 > `CreateScope()`: الـ `DbContext` بيعيش لمدة request واحد، ولسه مفيش request، فبنعمل scope مؤقت.
 > لو طلع `address already in use`: البروجكت شغال في مكان تاني، فوقفيه بـ `Ctrl+C`.
 
-- [ ] أول Admin، وباسورده في User Secrets.
+- [x] أول Admin. بياناته في User Secrets، **مش في الكود**:
+
+```bash
+dotnet user-secrets set "AdminUser:Email" "admin@school.com" --project SchoolSystem
+dotnet user-secrets set "AdminUser:Password" "YOUR_PASSWORD" --project SchoolSystem
+```
+
+- [x] `SeedAdminAsync(userManager, email, password)`:
+  1. `FindByEmailAsync`: لو موجود، متعمليش حاجة.
+  2. `new AppUser { UserName, Email, EmailConfirmed = true }`
+  3. `CreateAsync(user, password)`، ولو `!result.Succeeded` ← `throw` بالأسباب.
+  4. `AddToRoleAsync(user, Roles.Admin)`
+- [x] في `Program.cs`: اقري `builder.Configuration["AdminUser:Email"]`، ولو فاضي ← `throw`.
+
+> ⚠️ `SeedRolesAsync` **قبل** `SeedAdminAsync`، لأن `AddToRoleAsync` محتاج الـ role يكون موجود.
+> لو طلع `Error Number:10061` أو `Connection refused`: Docker مقفول. افتحيه، وبعدين `docker start todo-sql`.
 
 ## الجاي ⏳
 
