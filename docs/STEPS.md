@@ -213,45 +213,74 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 ## 10. Seeding (بيانات أولية) ✅
 
 - [x] أسماء الـ roles كـ constants في `Shared/Constants/Roles.cs` (`public static class`).
-- [x] `IdentitySeeder.SeedRolesAsync` في `Persistence/Data/Seeding`: لو الـ role مش موجود، اعمله.
-- [x] نناديه في `Program.cs` بعد `builder.Build()`:
-
-```csharp
-public static async Task Main(string[] args)   // async عشان فيها await
-...
-using (var scope = app.Services.CreateScope())
-{
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    await IdentitySeeder.SeedRolesAsync(roleManager);
-}
-```
-
-> `CreateScope()`: الـ `DbContext` بيعيش لمدة request واحد، ولسه مفيش request، فبنعمل scope مؤقت.
-> لو طلع `address already in use`: البروجكت شغال في مكان تاني، فوقفيه بـ `Ctrl+C`.
-
-- [x] أول Admin. بياناته في User Secrets، **مش في الكود**:
+- [x] بيانات الـ Admin في User Secrets، **مش في الكود**:
 
 ```bash
 dotnet user-secrets set "AdminUser:Email" "admin@school.com" --project SchoolSystem
 dotnet user-secrets set "AdminUser:Password" "YOUR_PASSWORD" --project SchoolSystem
 ```
 
-- [x] `SeedAdminAsync(userManager, email, password)`:
-  1. `FindByEmailAsync`: لو موجود، متعمليش حاجة.
-  2. `new AppUser { UserName, Email, EmailConfirmed = true }`
-  3. `CreateAsync(user, password)`، ولو `!result.Succeeded` ← `throw` بالأسباب.
-  4. `AddToRoleAsync(user, Roles.Admin)`
-- [x] في `Program.cs`: اقري `builder.Configuration["AdminUser:Email"]`، ولو فاضي ← `throw`.
+- [x] `IDataSeeding` في `DomainLayer/Contracts`، وفيه method واحدة: `Task DataSeedAsync();`
+  > الـ interface بيقول **إيه** اللي بيتعمل، مش **إزاي**. عشان كده method واحدة بس.
+- [x] `DataSeeding : IDataSeeding` في `Persistence/Data/Seeding`:
+  - الـ constructor بياخد `SchoolDbContext` و `UserManager<AppUser>` و `RoleManager<IdentityRole>` و `IConfiguration` (DI).
+  - `DataSeedAsync()`: لو فيه pending migrations ← `MigrateAsync()`، وبعدين `SeedRolesAsync()`، وبعدين `SeedAdminAsync()`.
+  - `private SeedRolesAsync()`: لو الـ role مش موجود (`RoleExistsAsync`)، اعمله.
+  - `private SeedAdminAsync()`: اقري الإيميل والباسورد من `_configuration`، وبعدين `FindByEmailAsync`، و `CreateAsync`، و `AddToRoleAsync(user, Roles.Admin)`.
 
-> ⚠️ `SeedRolesAsync` **قبل** `SeedAdminAsync`، لأن `AddToRoleAsync` محتاج الـ role يكون موجود.
-> لو طلع `Error Number:10061` أو `Connection refused`: Docker مقفول. افتحيه، وبعدين `docker start todo-sql`.
+> ⚠️ الـ roles **قبل** الـ Admin، لأن `AddToRoleAsync` محتاج الـ role يكون موجود.
+
+## 11. تنضيف Program.cs (Extension Methods) ✅
+
+- [x] `Persistence/InfrastructureServicesRegistration.cs`:
+
+```csharp
+public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
+{
+    services.AddDbContext<SchoolDbContext>(...);
+    services.AddIdentityCore<AppUser>(...).AddRoles<IdentityRole>().AddEntityFrameworkStores<SchoolDbContext>();
+    services.AddScoped<IDataSeeding, DataSeeding>();
+    return services;
+}
+```
+
+- [x] `SchoolSystem/Extensions/WebApplicationRegistration.cs`:
+
+```csharp
+public static async Task SeedDataBaseAsync(this WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var dataSeeding = scope.ServiceProvider.GetRequiredService<IDataSeeding>();
+    await dataSeeding.DataSeedAsync();
+}
+```
+
+- [x] `Program.cs` بقى:
+
+```csharp
+builder.Services.AddInfrastructureServices(builder.Configuration);
+var app = builder.Build();
+await app.SeedDataBaseAsync();
+```
+
+> **Extension method:** `static` class، و `static` method، و `this` قبل أول parameter. بنناديها بعد النقطة: `builder.Services.AddInfrastructureServices(...)`، من غير اسم الكلاس.
+> لو قالك "does not contain a definition": ناقص `using` للـ namespace بتاع الكلاس (`Cmd+.`).
+> **DI:** الكلاس بيطلب اللي محتاجه في الـ constructor، والبروجكت بيعمله ويديهوله.
+> `CreateScope()`: الحاجات الـ `Scoped` (زي الـ `DbContext`) بتعيش جوه request واحد، ولسه مفيش request، فبنعمل scope مؤقت.
+
+**مشاكل مشهورة:**
+> `address already in use`: البروجكت شغال في مكان تاني، فوقفيه بـ `Ctrl+C`.
+> `Error Number:10061` أو `Connection refused`: Docker مقفول. افتحيه، وبعدين `docker start todo-sql`.
+
+---
 
 ## الجاي ⏳
 
+- [ ] Seeding للمواد من `subjects.json` (`SeedSubjectsAsync`)
+- [ ] Controllers (Presentation) و Swagger
 - [ ] JWT (الـ login)
 - [ ] DTOs (في Shared)
 - [ ] Service interfaces (ServiceAbstractionLayer) والـ implementations (ServiceLayer)
-- [ ] Controllers (Presentation) و Swagger
 - [ ] Frontend
 
 ---
