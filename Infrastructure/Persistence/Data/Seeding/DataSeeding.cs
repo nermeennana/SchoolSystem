@@ -71,6 +71,28 @@ public class DataSeeding : IDataSeeding
         }
     }
 
+    private async Task SeedSubjectsAsync()
+    {
+        if (!await _schoolDbContext.Subjects.AnyAsync())
+        {
+            var seedFilePath = Path.Combine(AppContext.BaseDirectory, "Data", "Seeding", "subjects.json");
+
+            using var subjectData = File.OpenRead(seedFilePath);
+
+            // For Enums
+            // var options = new JsonSerializerOptions
+            // {
+            //     Converters = { new JsonStringEnumConverter() }
+            // };
+
+            var subjectsList = await JsonSerializer.DeserializeAsync<List<Subject>>(subjectData);
+
+            if (subjectsList != null && subjectsList.Any())
+            {
+                await _schoolDbContext.Subjects.AddRangeAsync(subjectsList);
+            }
+        }
+    }
     public async Task DataSeedAsync()
     {
         try
@@ -79,27 +101,7 @@ public class DataSeeding : IDataSeeding
             {
                 await _schoolDbContext.Database.MigrateAsync();
             }
-            // if (!(await _schoolDbContext.Schools.AnyAsync()))
-            // {
-            //     // var todos = File.OpenRead(@"..\Infrastructure\perisistence\DataSeed\todos.json");
-            //     var seedFilePath = Path.Combine(
-            //         "..",
-            //         "Infrastructure",
-            //         "perisistence",
-            //         "DataSeed",
-            //         "schools.json");
-            //     using var schoolData = File.OpenRead(seedFilePath);
-                
-            //     var options = new JsonSerializerOptions
-            //     {
-            //         Converters = { new JsonStringEnumConverter() }
-            //     };
-            //     var todosList = await JsonSerializer.DeserializeAsync<List<School>>(schoolData, options);
-            //     if (todosList != null && todosList.Any())
-            //     {
-            //         await _schoolDbContext.Schools.AddRangeAsync(todosList);
-            //     }
-            // }
+            await SeedSubjectsAsync();
             await SeedRolesAsync();
             await SeedAdminAsync();
             await _schoolDbContext.SaveChangesAsync();

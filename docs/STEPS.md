@@ -230,6 +230,24 @@ dotnet user-secrets set "AdminUser:Password" "YOUR_PASSWORD" --project SchoolSys
 
 > ⚠️ الـ roles **قبل** الـ Admin، لأن `AddToRoleAsync` محتاج الـ role يكون موجود.
 
+- [x] بيانات ثابتة (المواد) من JSON:
+  - `Persistence/Data/Seeding/subjects.json`: **array** على طول `[ { "Name": "..." } ]`، من غير `Id`. وأسماء الـ properties لازم نفس أسماءها في الكلاس.
+  - في `Persistence.csproj`، عشان الملف يتنسخ لـ `bin`:
+
+```xml
+<ItemGroup>
+  <None Update="Data/Seeding/subjects.json" CopyToOutputDirectory="PreserveNewest" />
+</ItemGroup>
+```
+
+  - `private SeedSubjectsAsync()`: لو `!Subjects.AnyAsync()`:
+    - `Path.Combine(AppContext.BaseDirectory, "Data", "Seeding", "subjects.json")`
+    - `File.OpenRead` ← `JsonSerializer.DeserializeAsync<List<Subject>>` ← `AddRangeAsync`
+    - و `SaveChangesAsync()` في آخر `DataSeedAsync`.
+
+> `AppContext.BaseDirectory` أحسن من `".."`، لأنه بيشتغل مهما كان البروجكت اتشغل منين.
+> لو المسار في الـ csproj غلط، الملف مش هيتنسخ **من غير error**.
+
 ## 11. تنضيف Program.cs (Extension Methods) ✅
 
 - [x] `Persistence/InfrastructureServicesRegistration.cs`:
@@ -276,7 +294,6 @@ await app.SeedDataBaseAsync();
 
 ## الجاي ⏳
 
-- [ ] Seeding للمواد من `subjects.json` (`SeedSubjectsAsync`)
 - [ ] Controllers (Presentation) و Swagger
 - [ ] JWT (الـ login)
 - [ ] DTOs (في Shared)
