@@ -292,12 +292,40 @@ await app.SeedDataBaseAsync();
 
 ---
 
+## 12. Generic Repository + Unit of Work ✅
+
+**الفكرة:** بدل ما نكتب Add/Update/Delete لكل entity لوحده، نكتبهم **مرة واحدة** generic.
+
+- [x] `IGenericRepository<TEntity, TKey>` في `DomainLayer/Contracts`:
+  `GetAllAsync`, `GetByIdAsync`, `Add`, `Update`, `Delete`
+  > الشرط: `where TEntity : BaseEntity<TKey>`
+  > `Add`/`Update`/`Delete` مش async، لأنها بتسجل التغيير في الذاكرة بس. الحفظ الحقيقي في `SaveChangesAsync`.
+  > قاعدة: أي method اسمها فيه `Async` لازم ترجع `Task`.
+- [x] `GenericRepository` في `Persistence/Repositories`، وبيستخدم `_context.Set<TEntity>()`
+  > لو `ToListAsync` عملت error ← ناقص `using Microsoft.EntityFrameworkCore;`
+- [x] `IUnitOfWork` في `DomainLayer/Contracts`: `GetRepository<TEntity, TKey>()` و `SaveChangesAsync()`
+- [x] `UnitOfWork` في `Persistence/Repositories`:
+  - `Dictionary<string, object>` = دولاب، الـ key اسم الـ entity (`typeof(TEntity).Name`)
+  - لو الدرج مش موجود ← `new GenericRepository` ونحطه فيه
+  - نرجّع اللي في الدرج مع **cast** لـ `IGenericRepository<TEntity, TKey>` (لأنه متخزن `object`)
+- [x] التسجيل: `services.AddScoped<IUnitOfWork, UnitOfWork>();` في `AddInfrastructureServices`
+
+**الاستخدام (في السيرفيس):**
+```csharp
+var repo = _unitOfWork.GetRepository<Student, int>();
+repo.Add(student);                    // لسه في الذاكرة
+await _unitOfWork.SaveChangesAsync(); // دلوقتي اتحفظ في الداتابيز
+```
+> الـ UnitOfWork = **مدير المخزن**: يديكي الـ repository، ولما تخلصي تقوليله "احفظ" فيحفظ كله مرة واحدة.
+
+---
+
 ## الجاي ⏳
 
+- [ ] Services + Service Manager
 - [ ] Controllers (Presentation) و Swagger
 - [ ] JWT (الـ login)
 - [ ] DTOs (في Shared)
-- [ ] Service interfaces (ServiceAbstractionLayer) والـ implementations (ServiceLayer)
 - [ ] Frontend
 
 ---

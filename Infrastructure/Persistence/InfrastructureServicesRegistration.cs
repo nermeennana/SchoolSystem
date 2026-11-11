@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Persistence.Data;
 using Persistence.Data.Seeding;
+using Persistence.Repositories;
 
 namespace Persistence;
 
@@ -30,6 +31,7 @@ public static class InfrastructureServicesRegistration
           .AddEntityFrameworkStores<SchoolDbContext>();
 
         services.AddScoped<IDataSeeding, DataSeeding>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
         return services;
     }
 }
