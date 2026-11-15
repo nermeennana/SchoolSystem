@@ -336,7 +336,7 @@ await _unitOfWork.SaveChangesAsync(); // دلوقتي اتحفظ في الدات
 
 ---
 
-## 13. Services (Subject) ⏳
+## 13. Services (Subject) ✅
 
 **الترتيب:** DTO ← IService ← AutoMapper (Profile + تسجيل) ← Service ← Service Manager ← Controller
 
@@ -445,7 +445,68 @@ Service    ← UnitOfWork     ← (Subject repo, Student repo, ...)
   > **ليه الـ UnitOfWork مستخدمش Lazy؟** هو عمل نفس الفكرة بـ **Dictionary**، لأن الـ entities **مش معروفة مسبقاً** (generic). أما السيرفيسات **معروفة بالاسم**، فـ Lazy field لكل واحد.
 - [ ] التسجيل: `services.AddScoped<IServiceManager, ServiceManager>();` في `AddApplicationServices`
 
+### Controller (`Infrastructure/Presentation/Controllers/SubjectsController.cs`)
+**الـ Controller** = **الباب** اللي الـ frontend بيخبط عليه. بياخد الـ request، ويكلّم الـ ServiceManager، ويرجّع الرد.
+- [x] `[ApiController]` + `[Route("api/[controller]")]` + `: ControllerBase` + Primary Constructor (`IServiceManager`)
+  > `[controller]` = اسم الكلاس من غير كلمة Controller، فيبقى `api/subjects`.
+  > `ControllerBase` مش `Controller`، لأن `Controller` فيه حاجات Views (HTML)، وإحنا API بس.
+- [x] `[HttpGet]` ← `GetAll` ← `Ok(...)`
+- [x] `[HttpGet("{id:int}")]` ← `GetById` ← لو null `NotFound()`، وإلا `Ok(...)`
+  > `Ok` = **200** ✅ و `NotFound` = **404** ❌ (status codes)
+  > `:int` ← لو حد كتب `api/subjects/abc` يرجعله 404 على طول.
+  > أسماء الـ methods المتعارف عليها: `GetAllSubjects` (من غير كلمة Controller).
+
+  > **Primary Constructor ولا القديم؟** للكلاسات اللي بتاخد من الـ DI بس (Services, Controllers) ← Primary ✅.
+  > لو محتاجة **logic** في الـ constructor، أو **`readonly` مضمونة** ← القديم (الـ parameter في الـ Primary ممكن يتغير بالغلط).
+
+### Swagger + تشغيل الـ Controllers (`Program.cs`)
+- [x] التسطيب: `dotnet add SchoolSystem package Swashbuckle.AspNetCore --version 11.0.1`
+- [x] **قبل** `builder.Build()`:
+  ```csharp
+  builder.Services.AddControllers();           // فيه Controllers، دوّر عليهم
+  builder.Services.AddEndpointsApiExplorer();  // يجمع معلومات الـ endpoints
+  builder.Services.AddSwaggerGen();            // يعمل صفحة Swagger
+  ```
+- [x] **بعد** `builder.Build()`:
+  ```csharp
+  if (app.Environment.IsDevelopment())
+  {
+      app.UseSwagger();
+      app.UseSwaggerUI();
+  }
+  app.MapControllers();   // وصّل كل request بالـ Controller بتاعه
+  ```
+  > Swagger في **Development بس**، عشان محدش غريب يشوف الـ endpoints على السيرفر الحقيقي.
+  > `AddControllers` بيلاقي `SubjectsController` في مشروع Presentation لوحده، لأن `SchoolSystem` عامل reference ليه.
+- [x] التجربة: Docker شغال ← `dotnet run --project SchoolSystem` ← `http://localhost:5182/swagger`
+  > في Swagger: افتحي الـ endpoint ← **Try it out** ← **Execute**.
+
+### Controller: POST / PUT / DELETE
+- [x] `[HttpPost]` ← `CreateSubjectAsync` ← `CreatedAtAction(nameof(GetSubjectById), new { id = created.Id }, created)`
+  > لما حاجة **جديدة تتعمل** ← **201 Created** (مش 200)، ومعاها header اسمه `Location: /api/subjects/11`.
+  > الـ DTO بييجي من الـ **body** (JSON)، و `[ApiController]` بيعرف ده لوحده (مش محتاجين `[FromBody]`).
+- [x] `[HttpPut("{id:int}")]` ← `await UpdateSubjectAsync(id, dto)` ← `NoContent()`
+- [x] `[HttpDelete("{id:int}")]` ← `await DeleteSubjectAsync(id)` ← `NoContent()`
+  > `NoContent` = **204**: "تمام اتعمل، ومفيش حاجة أرجعهالك".
+  > بيرجعوا `Task<IActionResult>` (من غير `<SubjectDto>`)، لأن مفيش بيانات.
+
+**⚠️ أخطاء وقعت فيها:**
+> **نسيت `await`** ← رجع 204 بس **ولا حاجة اتغيرت**! الـ Controller مستناش، والـ request خلص، والـ DbContext اتقفل، والسيرفيس فشل في صمت.
+> الـ compiler بينبّه بـ warning أصفر (CS1998: `async` من غير `await`). **خدي بالك من الـ warnings الصفرا.**
+>
+> **`var x = await UpdateSubjectAsync(...)`** ← error، لأن `Task` (من غير `<...>`) **مبترجعش حاجة**.
+> القاعدة: `Task<حاجة>` ← `var x = await ...` ✅ | `Task` بس ← `await ...` لوحدها ✅
+>
+> **`if (x == null)` على Task** ← ملوش معنى. الـ Task عمره ما بيبقى null، والسيرفيس بيعمل `throw` لو مش موجود.
+
+**ملاحظات من التجربة:**
+> **الـ id قفز لـ 1001/1002؟** طبيعي. SQL Server بيحجز أرقام مقدماً، ولما يتقفل ويفتح (Docker) بيضيعوا. الـ id وظيفته يبقى **unique**، مش متتالي.
+> **PUT/DELETE على id مش موجود ← 500** (مش 404): متوقع لحد ما نعمل Error Handling Middleware.
+> **"201 Undocumented" في Swagger:** شكل بس، وهيتظبط بـ `[ProducesResponseType]`.
+> ⚠️ لسه **أي حد** يقدر يضيف ويمسح، والقفل بـ `[Authorize(Roles = Roles.Admin)]` بعد الـ JWT.
+
 ### الجاي في القسم ده
+- [ ] commit + push
 - [ ] Controller
 
 ---
