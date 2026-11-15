@@ -1,6 +1,7 @@
 using Persistence;
 using ServiceLayer;
 using SchoolSystem.Extensions;
+using SchoolSystem.CustomMiddlewares;
 
 namespace SchoolSystem;
 
@@ -18,6 +19,7 @@ public class Program
         builder.Services.AddApplicationServices();
 
         var app = builder.Build();
+        app.UseMiddleware<CustomExceptionHandlerMiddleware>();
         
         await app.SeedDataBaseAsync();
 

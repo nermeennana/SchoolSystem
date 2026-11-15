@@ -490,6 +490,23 @@ Service    ← UnitOfWork     ← (Subject repo, Student repo, ...)
   > `NoContent` = **204**: "تمام اتعمل، ومفيش حاجة أرجعهالك".
   > بيرجعوا `Task<IActionResult>` (من غير `<SubjectDto>`)، لأن مفيش بيانات.
 
+  > **CRUD** = الـ 4 عمليات الأساسية على أي بيانات:
+  >
+  > | | المعنى | HTTP | عندنا |
+  > |---|---|---|---|
+  > | **C**reate | إضافة | POST | `CreateSubject` |
+  > | **R**ead | قراءة | GET | `GetAllSubjects` / `GetSubjectById` |
+  > | **U**pdate | تعديل | PUT | `UpdateSubject` |
+  > | **D**elete | مسح | DELETE | `DeleteSubject` |
+
+  > **`ActionResult<T>` ولا `IActionResult`؟**
+  > `IActionResult` = "هرجّع **رد**" (أي status code)، **من غير** ما أقول فيه بيانات نوعها إيه.
+  > `ActionResult<SubjectDto>` = "هرجّع **يا `SubjectDto`، يا رد زي `NotFound()`**". وده بيخلّي:
+  > - Swagger **يعرف** شكل البيانات اللي راجعة، ويعرضها في الـ Schemas.
+  > - الكود أوضح، لأن اللي يقرا يعرف الـ endpoint بيرجّع إيه.
+  >
+  > **القاعدة:** بيرجّع **بيانات** (GET, POST) ← `ActionResult<T>`. مش بيرجّع بيانات (PUT, DELETE) ← `IActionResult`.
+
 **⚠️ أخطاء وقعت فيها:**
 > **نسيت `await`** ← رجع 204 بس **ولا حاجة اتغيرت**! الـ Controller مستناش، والـ request خلص، والـ DbContext اتقفل، والسيرفيس فشل في صمت.
 > الـ compiler بينبّه بـ warning أصفر (CS1998: `async` من غير `await`). **خدي بالك من الـ warnings الصفرا.**
@@ -511,12 +528,70 @@ Service    ← UnitOfWork     ← (Subject repo, Student repo, ...)
 
 ---
 
+## 14. Error Handling ✅
+
+**الهدف:** لما حاجة مش موجودة يرجع **404** برسالة واضحة، مش **500**.
+**الترتيب:** Exceptions ← نستخدمها في السيرفيس ← `ErrorToReturn` ← Middleware ← التسجيل
+
+### الـ Exceptions (`Core/DomainLayer/Exceptions/`)
+- [x] `public abstract class NotFoundException(string message) : Exception(message) { }`
+- [x] `public sealed class SubjectNotFoundException(int id) : NotFoundException($"Subject with ID {id} not found.") { }`
+  > **ليه مش `Exception` عادية؟** الـ Middleware لازم يعرف **نوع** الخطأ، عشان يختار الـ status code.
+  > `abstract` ← محدش يعمل منها object على طول، هي **عيلة** بس.
+  > `sealed` ← محدش يورث منها، هي آخر واحدة.
+  > `: Exception(message)` ← بتبعت الرسالة للأب، عشان تتحفظ في `.Message`.
+  ```
+  Exception
+     └── NotFoundException (abstract) ← الـ Middleware بيمسك ده ← 404
+            ├── SubjectNotFoundException
+            └── StudentNotFoundException (بعدين، وهتشتغل لوحدها)
+  ```
+
+### في السيرفيس
+- [x] `throw new SubjectNotFoundException(id);` في GetById و Update و Delete
+- [x] `GetById` بقت `Task<SubjectDto>` (من غير `?`)، والـ Controller اتشال منه الـ `if null`
+  > **مكان واحد** بيقرر "مش موجود = 404"، وهو الـ Middleware. والرسالة متكتوبة جوه الـ exception، فلو اتغيرت بتتغير في مكان واحد.
+
+### `ErrorToReturn` (`Shared/ErrorModels/`)
+- [x] `StatusCode` + `Message` (properties بس) ← `new ErrorToReturn { StatusCode = 404, Message = "..." }`
+  > شكل رسالة الخطأ اللي بترجع للـ frontend كـ JSON.
+  > **constructor ولا `{ }`؟** الاتنين صح. الـ constructor بيجبرك تدي القيمتين (أأمن)، والـ `{ StatusCode = 404 }` أوضح. ⚠️ لو فيه constructor بـ parameters، **مينفعش** تستخدمي `{ }`.
+
+### Middleware (`SchoolSystem/CustomMiddlewares/CustomExceptionHandlerMiddleware.cs`)
+**Middleware** = محطة في السلسلة اللي كل request بيعدّي عليها:
+```
+Request ──► [Middleware 1] ──► [Middleware 2] ──► Controller
+Response ◄── [Middleware 1] ◄── [Middleware 2] ◄──┘
+```
+> بتاعنا **أول محطة**، وزي **شبكة الأمان** تحت لاعب السيرك 🎪: لو أي حتة بعده عملت exception، هو بيمسكها.
+- [x] Primary Constructor: `RequestDelegate _next` (المحطة اللي بعدي) + `ILogger<...> _logger`
+- [x] `InvokeAsync(HttpContext)` (الاسم لازم كده): `try { await _next(httpContext); } catch (Exception ex) { log + handle }`
+- [x] `HandleExceptionAsync`:
+  1. `var statusCode = ex switch { NotFoundException => 404, _ => 500 };`
+  2. لو 500 ← رسالة عامة `"An unexpected error occurred."`، غير كده ← `ex.Message`
+  3. `context.Response.StatusCode = statusCode;`
+  4. `await context.Response.WriteAsJsonAsync(new ErrorToReturn(statusCode, message));`
+  > 🔒 **ليه رسالة عامة في الـ 500؟** الـ 500 = bug عندنا، و `ex.Message` ممكن يكون فيه تفاصيل داخلية (جداول، connection). التفاصيل تتكتب في الـ **log** بس.
+  > المكان في مشروع SchoolSystem، لأنه بيتعامل مع `HttpContext` (حاجات web).
+- [x] `Program.cs`: `app.UseMiddleware<CustomExceptionHandlerMiddleware>();` **أول سطر بعد `builder.Build()`**
+  > لازم **أول** محطة، عشان الشبكة تبقى تحت كل حاجة.
+
+> **جوه `{ }`:** الشمال = اسم الـ property **في الكلاس**، واليمين = القيمة. (`StatusCode = statusCode` ✅، و `context.Response.StatusCode = ...` ❌)
+> **ternary:** `var message = شرط ? لو_صح : لو_غلط;` ← `if/else` في سطر واحد.
+> **النتيجة:** `GET /api/Subjects/99` ← `404` + `{"statusCode":404,"message":"Subject with ID 99 not found."}`
+
+> ⭐ **للمشروع الجاي، وللـ interviews:** فيه طريقة **أحدث** من .NET 8 اسمها **`IExceptionHandler`**، وبتعمل نفس الحاجة.
+> إحنا ماشيين بالـ Middleware زي الكورس و ToDoApp، لأنه بيوضّح الفكرة أحسن. بس الاتنين موجودين، وجرّبي `IExceptionHandler` في المشروع الجاي.
+
+---
+
 ## الجاي ⏳
 
-- [ ] Services + Service Manager
-- [ ] Controllers (Presentation) و Swagger
-- [ ] JWT (الـ login)
-- [ ] DTOs (في Shared)
+- [x] Error Handling (قسم 14)
+- [ ] باقي الـ Entities: Student و Teacher و Enrollment و Attendance (نفس نمط Subject)
+- [ ] Validation للـ DTOs
+- [ ] JWT + Roles (الـ login، و `[Authorize(Roles = Roles.Admin)]`)
+- [ ] Unit Tests
 - [ ] Frontend
 
 ---

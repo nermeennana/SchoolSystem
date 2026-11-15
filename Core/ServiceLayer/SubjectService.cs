@@ -1,6 +1,7 @@
 using System;
 using AutoMapper;
 using DomainLayer.Contracts;
+using DomainLayer.Exceptions;
 using DomainLayer.Models;
 using ServiceAbstractionLayer;
 using Shared.DataTransferObjects.Subjects;
@@ -21,15 +22,15 @@ public class SubjectService(IUnitOfWork _unitOfWork, IMapper _mapper) : ISubject
         return subjectDtos;
     }
 
-    public async Task<SubjectDto?> GetSubjectByIdAsync(int id)
+    public async Task<SubjectDto> GetSubjectByIdAsync(int id)
     {
         var repo = _unitOfWork.GetRepository<Subject, int>();
         var subject = await repo.GetByIdAsync(id);
         if(subject == null)
         {
-            return null;
+            throw new SubjectNotFoundException(id);
         }
-        var subjectDto = _mapper.Map<SubjectDto?>(subject);
+        var subjectDto = _mapper.Map<SubjectDto>(subject);
 
         return subjectDto;
     }
@@ -47,7 +48,7 @@ public class SubjectService(IUnitOfWork _unitOfWork, IMapper _mapper) : ISubject
         var subject = await repo.GetByIdAsync(id);
         if(subject == null)
         {
-            throw new Exception($"Subject with id {id} not found.");
+            throw new SubjectNotFoundException(id);
         }
         _mapper.Map(subjectDto, subject);
         repo.Update(subject);
@@ -59,7 +60,7 @@ public class SubjectService(IUnitOfWork _unitOfWork, IMapper _mapper) : ISubject
         var subject = await repo.GetByIdAsync(id);
         if(subject == null)
         {
-            throw new Exception($"Subject with id {id} not found.");
+            throw new SubjectNotFoundException(id);
         }
         repo.Delete(subject);
         await _unitOfWork.SaveChangesAsync();

@@ -20,10 +20,6 @@ public class SubjectsController(IServiceManager _serviceManager) : ControllerBas
     public async Task<ActionResult<SubjectDto>> GetSubjectById(int id)
     {
         var subject = await _serviceManager.SubjectService.GetSubjectByIdAsync(id);
-        if(subject == null)
-        {
-            return NotFound();
-        }
         return Ok(subject);
     }
 
