@@ -8,7 +8,7 @@ namespace Persistence.Repositories;
 public class UnitOfWork : IUnitOfWork
 {
     private readonly SchoolDbContext _schoolDbContext;
-    private readonly Dictionary<string, object> _repositories = new();
+    private readonly Dictionary<string, object> _repositories = [];
     
     public UnitOfWork(SchoolDbContext context)
         => _schoolDbContext = context;

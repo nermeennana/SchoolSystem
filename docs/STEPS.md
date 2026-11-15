@@ -286,6 +286,22 @@ await app.SeedDataBaseAsync();
 > **DI:** الكلاس بيطلب اللي محتاجه في الـ constructor، والبروجكت بيعمله ويديهوله.
 > `CreateScope()`: الحاجات الـ `Scoped` (زي الـ `DbContext`) بتعيش جوه request واحد، ولسه مفيش request، فبنعمل scope مؤقت.
 
+**🗺️ كل تسجيل فين؟** كل layer بيسجّل حاجاته في ملف **جوه نفسه**:
+
+```
+Persistence/
+└── InfrastructureServicesRegistration.cs   ← DbContext, Identity, UnitOfWork, Seeding
+
+ServiceLayer/
+└── ApplicationServicesRegistration.cs      ← AutoMapper (وبعدين ServiceManager)
+
+SchoolSystem/Extensions/
+└── WebApplicationRegistration.cs           ← حاجات الـ web نفسه (Seeding call، وبعدين Swagger و JWT)
+```
+
+> و`Program.cs` **بينادي** عليهم بس.
+> ليه؟ لأن **كل layer هو اللي عارف كلاساته**: Persistence عارف `UnitOfWork`، و ServiceLayer عارف `SubjectProfile`. كده `Program.cs` مش محتاج يعرف كل كلاس، وده فكرة الـ Onion.
+
 **مشاكل مشهورة:**
 > `address already in use`: البروجكت شغال في مكان تاني، فوقفيه بـ `Ctrl+C`.
 > `Error Number:10061` أو `Connection refused`: Docker مقفول. افتحيه، وبعدين `docker start todo-sql`.
@@ -317,6 +333,120 @@ repo.Add(student);                    // لسه في الذاكرة
 await _unitOfWork.SaveChangesAsync(); // دلوقتي اتحفظ في الداتابيز
 ```
 > الـ UnitOfWork = **مدير المخزن**: يديكي الـ repository، ولما تخلصي تقوليله "احفظ" فيحفظ كله مرة واحدة.
+
+---
+
+## 13. Services (Subject) ⏳
+
+**الترتيب:** DTO ← IService ← AutoMapper (Profile + تسجيل) ← Service ← Service Manager ← Controller
+
+### الـ DTOs (`Shared/DataTransferObjects/Subjects/`)
+- [x] `SubjectDto` (`Id` + `Name`): اللي بيطلع للـ frontend.
+- [x] `CreateAndUpdateSubjectDto` (`Name` بس): اللي بييجي من الـ frontend.
+  > **DTO** = الشكل اللي البيانات بتطلع بيه لبرّه. مش بنبعت الـ entity نفسه، عشان منطلّعش حاجات زي `PasswordHash`.
+  > الـ Create مفيهوش `Id`، لأن الداتابيز هي اللي بتعمله.
+  > ⚠️ نوع الـ `Id` في الـ DTO لازم يبقى زي الـ entity (`int` هنا، مش `Guid` زي ToDoApp).
+
+### `ISubjectService` (`Core/ServiceAbstractionLayer`)
+- [x] `GetAll`, `GetById`, `Create`, `Update`, `Delete` (كلهم `Async`)
+  > **Create بترجع `SubjectDto`**: عشان نرجّع الـ **Id** الجديد اللي اتعمل.
+  > **Update بتاخد `id`**: عشان نعرف **أنهي** مادة هتتعدل (الـ id من الـ URL، والبيانات من الـ DTO).
+  > **Update و Delete بيرجعوا `Task` بس**: مفيش معلومة جديدة نرجعها.
+  > **مين يقدر يضيف/يعدّل؟** ده مش شغل السيرفيس. ده في الـ Controller بـ `[Authorize(Roles = Roles.Admin)]` بعد الـ JWT.
+
+### AutoMapper
+- [x] التسطيب في `ServiceLayer`:
+  ```bash
+  dotnet add Core/ServiceLayer package AutoMapper --version 16.3.0
+  ```
+  > ⚠️ 14.0.0 و 16.0.0 (اللي في الكورس) فيهم ثغرة DoS. الصلّحة من 16.1.1. فحص الثغرات:
+  > `dotnet list package --vulnerable --include-transitive`
+  > مش محتاجين `AutoMapper.Extensions.Microsoft.DependencyInjection`، لأنها بقت جوه AutoMapper نفسها.
+- [x] `ServiceLayer/MappingProfiles/SubjectProfile.cs`:
+  ```csharp
+  public class SubjectProfile : Profile
+  {
+      public SubjectProfile()
+      {
+          CreateMap<Subject, SubjectDto>();                    // داتابيز ← frontend
+          CreateMap<CreateAndUpdateSubjectDto, Subject>();     // frontend ← داتابيز
+      }
+  }
+  ```
+  > **Mapping** = ننقل البيانات من نوع لنوع: `new SubjectDto { Id = s.Id, Name = s.Name }`. AutoMapper بيعمل ده لوحده لما الأسماء متطابقة.
+  > `ForMember`: لما الاسم **مختلف**، مثلاً `BrandName` ← `ProductBrand.Name`.
+- [ ] `ServiceLayer/ApplicationServicesRegistration.cs` ← `AddApplicationServices`:
+  ```csharp
+  services.AddAutoMapper(cfg => { }, typeof(SubjectProfile).Assembly);
+  ```
+  وفي `Program.cs`: `builder.Services.AddApplicationServices();`
+  > ⚠️ في AutoMapper 16 لازم `cfg => { }`، حتى لو فاضية. وده مكان الـ license key لو احتجناه.
+
+  > **`typeof(SubjectProfile).Assembly` يعني إيه؟**
+  > **Assembly** = المشروع بعد الـ build (`ServiceLayer.dll`).
+  > 1. `typeof(SubjectProfile)` ← الكلاس `SubjectProfile`
+  > 2. `.Assembly` ← المشروع اللي هو فيه (ServiceLayer)
+  > 3. AutoMapper بيدوّر جوه ServiceLayer على **أي** كلاس بيورث من `Profile` ويسجّله
+  >
+  > `SubjectProfile` مجرد **علامة** بنشاور بيها على المشروع، كأنك بتقولي: "روح المدرسة اللي فيها فصل 1/أ، وهات كل الفصول اللي فيها".
+  > **بدل** ما نكتب `cfg.AddProfile<SubjectProfile>()` لكل profile، ونفتكر نضيف كل واحد جديد.
+  >
+  > **نفس فكرة `ApplyConfigurationsFromAssembly`:**
+  >
+  > | | بيدوّر على | جوه |
+  > |---|---|---|
+  > | EF Core | أي `IEntityTypeConfiguration` | Persistence |
+  > | AutoMapper | أي `Profile` | ServiceLayer |
+
+### `SubjectService` (`Core/ServiceLayer`)
+- [x] Primary Constructor: `public class SubjectService(IUnitOfWork _unitOfWork, IMapper _mapper) : ISubjectService`
+  > الـ parameters جنب اسم الكلاس، وبتتشاف في كل الـ methods. مش محتاجين field ولا constructor (C# 12).
+- [x] **Get:** `GetRepository` ← `GetAllAsync` / `GetByIdAsync` ← `_mapper.Map<...>`
+  > `_mapper.Map<IEnumerable<SubjectDto>>(subjects)`: اللي بين `< >` هو اللي **عايزاه**، واللي بين `( )` هو اللي **عندك**.
+- [x] **Create:** Map ← `repo.Add` ← `SaveChangesAsync` ← رجّعي `Map<SubjectDto>`
+  > بعد الـ Save، EF بيحط الـ **Id الجديد** جوه نفس الـ object لوحده.
+- [x] **Update:** `GetByIdAsync(id)` ← لو null `throw` ← `_mapper.Map(dto, subject)` ← `repo.Update` ← Save
+- [x] **Delete:** `GetByIdAsync(id)` ← لو null `throw` ← `repo.Delete(subject)` ← Save
+  > **Update و Delete بيبدأوا بـ "هات الحاجة واتأكد إنها موجودة"**، لأنك مينفعش تعدّلي أو تمسحي حاجة مش موجودة.
+  > `_mapper.Map<Subject>(dto)` ← يعمل object **جديد** (Id = 0) ❌ في الـ Update
+  > `_mapper.Map(dto, subject)` ← ينقل البيانات **جوه الموجود** ✅
+  > الـ `Delete` في الـ repository بتاخد **entity**، مش id.
+  > ⚠️ الـ `throw new Exception(...)` مؤقت، وهيتبدل بـ `NotFoundException` في الـ error handling.
+
+  > **إمتى الـ method تبقى `async`؟** لو جواها حاجة **بتستنى الداتابيز**.
+  > `repo.Add/Update/Delete` ← في الذاكرة بس (تحطي في العربية 🛒) ← `void`
+  > `SaveChangesAsync` ← بيروح للداتابيز (الكاشير ⏳) ← `await`
+  > السيرفيس بيعمل الاتنين، فبيبقى `async`.
+
+  > ⚠️ **خدي بالك من اقتراحات الـ AI (Copilot):** كتب `AddAsync` و `DeleteAsync(id)`، وهما مش موجودين عندنا. دايماً قارني باللي في الـ interface.
+
+### Service Manager
+**ليه؟** مدخل واحد لكل السيرفيسات، بدل ما الـ Controller يطلب كل سيرفيس لوحده:
+```
+Controller ← ServiceManager ← (SubjectService, StudentService, ...)
+Service    ← UnitOfWork     ← (Subject repo, Student repo, ...)
+```
+- [x] `IServiceManager` (`ServiceAbstractionLayer`): `ISubjectService SubjectService { get; }`
+- [x] `ServiceManager` (`ServiceLayer`):
+  ```csharp
+  public class ServiceManager(IMapper _mapper, IUnitOfWork _unitOfWork) : IServiceManager
+  {
+      private readonly Lazy<ISubjectService> _lazySubjectService = new(() => new SubjectService(_unitOfWork, _mapper));
+      public ISubjectService SubjectService => _lazySubjectService.Value;
+  }
+  ```
+  > **Lazy** = "متعملوش غير لما حد يطلبه" (مطعم بيطبخ لما الزبون يطلب، مش كل المنيو الصبح).
+  > `Lazy<ISubjectService>` = صندوق فاضي 📦. و `() => new SubjectService(...)` = **الوصفة** جواه، ولسه متنفذتش.
+  > `.Value` = افتح الصندوق: أول مرة يعمل السيرفيس، وبعد كده يرجّع نفس النسخة.
+  >
+  > **ليه الـ ServiceManager بياخد UnitOfWork و Mapper؟** لأنه بيعمل `new SubjectService(...)` **بإيده**، فالـ DI مش هيساعد. فلازم هو اللي يسلّم السيرفيس المكونات اللي محتاجها 🥕
+  > **Lazy** = **إمتى** نعمله. و **UnitOfWork/Mapper** = **محتاج إيه** عشان يتعمل. حاجتين مختلفين.
+  >
+  > **ليه الـ UnitOfWork مستخدمش Lazy؟** هو عمل نفس الفكرة بـ **Dictionary**، لأن الـ entities **مش معروفة مسبقاً** (generic). أما السيرفيسات **معروفة بالاسم**، فـ Lazy field لكل واحد.
+- [ ] التسجيل: `services.AddScoped<IServiceManager, ServiceManager>();` في `AddApplicationServices`
+
+### الجاي في القسم ده
+- [ ] Controller
 
 ---
 

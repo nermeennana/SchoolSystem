@@ -1,4 +1,5 @@
 using Persistence;
+using ServiceLayer;
 using SchoolSystem.Extensions;
 
 namespace SchoolSystem;
@@ -10,6 +11,7 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
 
         builder.Services.AddInfrastructureServices(builder.Configuration);
+        builder.Services.AddApplicationServices();
 
         var app = builder.Build();
         
