@@ -24,6 +24,7 @@ public class CustomExceptionHandlerMiddleware(RequestDelegate _next, ILogger<Cus
         var statusCode = exception switch
         {
             NotFoundException => StatusCodes.Status404NotFound,
+            BadRequestException => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError
         };
 
