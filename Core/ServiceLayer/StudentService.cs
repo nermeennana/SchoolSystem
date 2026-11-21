@@ -35,27 +35,39 @@ public class StudentService(IUnitOfWork _unitOfWork, IMapper _mapper, UserManage
     }
     public async Task<StudentDto> CreateStudentAsync(CreateStudentDto createStudentDto)
     {
-        var user = new AppUser
-            {
-                UserName = createStudentDto.Email,
-                Email = createStudentDto.Email,
-                EmailConfirmed = true
-            };
-
-        var result = await _userManager.CreateAsync(user, createStudentDto.Password);
-        if (!result.Succeeded)
+        await _unitOfWork.BeginTransactionAsync();
+        try
         {
-            throw new BadRequestException($"Failed to create user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
-        }
-        
-        await _userManager.AddToRoleAsync(user, Roles.Student);
-        var student = _mapper.Map<Student>(createStudentDto);
-        student.UserId = user.Id;
+            var user = new AppUser
+                {
+                    UserName = createStudentDto.Email,
+                    Email = createStudentDto.Email,
+                    EmailConfirmed = true
+                };
+    
+            var result = await _userManager.CreateAsync(user, createStudentDto.Password);
+            if (!result.Succeeded)
+            {
+                throw new BadRequestException($"Failed to create user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+            
+            await _userManager.AddToRoleAsync(user, Roles.Student);
+            var student = _mapper.Map<Student>(createStudentDto);
+            student.UserId = user.Id;
+    
+            var repo = _unitOfWork.GetRepository<Student, int>();
+            repo.Add(student);
 
-        var repo = _unitOfWork.GetRepository<Student, int>();
-        repo.Add(student);
-        await _unitOfWork.SaveChangesAsync();
-        return _mapper.Map<StudentDto>(student);
+            await _unitOfWork.SaveChangesAsync();
+
+            await _unitOfWork.CommitTransactionAsync();
+            return _mapper.Map<StudentDto>(student);
+        }
+        catch (System.Exception)
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            throw;
+        }
     }
 
     public async Task UpdateStudentAsync(int id, UpdateStudentDto updateStudentDto)
